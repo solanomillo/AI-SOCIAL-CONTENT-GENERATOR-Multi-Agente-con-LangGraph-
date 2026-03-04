@@ -1,9 +1,10 @@
 """
 Interfaz principal con Streamlit.
-Versión mínima para validar estructura.
+Ahora ejecuta flujo completo con branching.
 """
 
 import streamlit as st
+from application.graph_builder import construir_grafo
 
 
 def run_app():
@@ -14,7 +15,7 @@ def run_app():
     )
 
     st.title("🚀 AI Social Content Generator")
-    st.markdown("### Generador Multi-Agente para Redes Sociales")
+    st.markdown("### Generador Multi-Agente con LangGraph")
 
     st.divider()
 
@@ -24,8 +25,27 @@ def run_app():
     )
 
     if st.button("Generar contenido"):
-        if user_input.strip() == "":
+        if not user_input.strip():
             st.warning("Por favor escribe una descripción.")
+            return
+
+        grafo = construir_grafo()
+
+        estado_inicial = {
+            "prompt_usuario": user_input,
+            "tipo_contenido": None,
+            "red_social": None,
+            "framework": None,
+            "tono": None,
+            "requiere_investigacion": None,
+            "resultado": None,
+        }
+
+        resultado = grafo.invoke(estado_inicial)
+
+        if resultado.get("resultado"):
+            st.success("Contenido generado:")
+            st.write(resultado["resultado"])
         else:
-            st.success("Estructura base funcionando ✅")
-            st.write("En la Fase 2 conectaremos LangGraph.")
+            st.error("No se generó contenido. Revisa la decisión del router.")
+            st.json(resultado)
