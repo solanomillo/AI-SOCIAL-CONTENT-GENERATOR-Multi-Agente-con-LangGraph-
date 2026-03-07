@@ -199,9 +199,9 @@ La aplicación se abrirá automáticamente en tu navegador en http://localhost:8
 ---
 
 👨‍💻 Autor
-Tu Nombre
-🔗 GitHub: https://github.com/tuusuario  
-📧 Email: tuemail@gmail.com
+**Julio Solano**  
+🔗 GitHub: [https://github.com/solanomillo](https://github.com/solanomillo)  
+📧 Email: [solanomillo144@gmail.com](mailto:solanomillo144@gmail.com)
 
 📄 Licencia
 Este proyecto está bajo la licencia MIT.
