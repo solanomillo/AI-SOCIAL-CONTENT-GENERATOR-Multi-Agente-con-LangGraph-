@@ -1,9 +1,10 @@
 """
 Router Agent - Decide qué red social usar basado en el contenido y preferencia del usuario.
-Primero busca menciones explícitas, luego usa Gemini.
+Primero busca menciones explícitas, luego palabras clave, y finalmente usa Gemini.
 """
 
 import logging
+import re
 from agents.tools import (
     instagram_tool,
     linkedin_tool,
@@ -14,49 +15,84 @@ from infrastructure.gemini_client import ClienteGemini
 
 logger = logging.getLogger(__name__)
 
-# Palabras clave para detección rápida
+# Palabras de alta prioridad (menciones explícitas de la red)
+REDES_EXPLICITAS = {
+    "linkedin": ["linkedin", "linked in", "linkedin"],
+    "instagram": ["instagram", "insta", "ig"],
+    "tiktok": ["tiktok", "tik tok"],
+    "facebook": ["facebook", "fb"]
+}
+
+# Palabras clave contextuales (cuando no hay mención explícita)
 KEYWORDS = {
     "linkedin": [
-        "linkedin", "linked in", "linkedin", "profesional", "carrera", 
-        "trabajo", "empleo", "curriculum", "b2b", "negocios", "empresa",
-        "laboral", "oficina", "corporativo", "cv", "hoja de vida"
+        # Contexto profesional
+        "profesional", "carrera", "trabajo", "empleo", "curriculum", 
+        "b2b", "negocios", "empresa", "corporativo", "laboral", "oficina",
+        "puesto", "contratación", "headhunter", "reclutamiento", "industria",
+        "experiencia laboral", "networking", "empleo"
     ],
     "instagram": [
-        "instagram", "insta", "ig", "foto", "visual", "reels", "historia",
-        "fotografía", "imagen", "filtro", "estético", "look", "moda",
-        "outfit", "maquillaje", "producto"
+        # Contexto visual
+        "foto", "visual", "reels", "historia", "fotografía", "imagen", 
+        "estético", "look", "moda", "outfit", "maquillaje", "producto",
+        "viaje", "paisaje", "comida", "restaurante", "decoración",
+        "estilo", "modelo", "photography"
     ],
     "tiktok": [
-        "tiktok", "tik tok", "viral", "baile", "trend", "challenge",
-        "trending", "danza", "coreografía", "reto", "divertido"
+        # Contexto viral
+        "viral", "baile", "trend", "challenge", "trending", "danza", 
+        "coreografía", "reto", "divertido", "humor", "gracioso", "entretenimiento",
+        "funny", "comedia", "sketch", "actuación"
     ],
     "facebook": [
-        "facebook", "fb", "comunidad", "grupo", "evento", "familiar",
-        "familia", "amigos", "discusión", "debate", "compartir"
+        # Contexto comunitario
+        "comunidad", "grupo", "evento", "familiar", "familia", "amigos", 
+        "discusión", "debate", "compartir", "cumpleaños", "reunión",
+        "vecinos", "local", "comunitario", "grupo de ayuda", "citas"
     ]
 }
 
 def detectar_red_por_keywords(contenido: str) -> str | None:
     """
     Detecta si el usuario menciona explícitamente una red social.
-    Retorna el nombre de la red o None.
+    Prioridad 1: Menciones directas de la red
+    Prioridad 2: Palabras clave contextuales
     """
     contenido_lower = contenido.lower()
     
-    # Primero buscar menciones directas del nombre de la red
-    for red in ["linkedin", "instagram", "tiktok", "facebook"]:
-        if red in contenido_lower:
-            logger.info(f"🔍 Mención directa detectada: {red}")
-            return red
+    # PRIORIDAD 1: Buscar menciones DIRECTAS del nombre de la red
+    for red, palabras in REDES_EXPLICITAS.items():
+        for palabra in palabras:
+            # Buscar la palabra como término independiente o con preposición
+            patrones = [
+                rf'\b{palabra}\b',                 # palabra exacta
+                rf'para {palabra}',                 # "para instagram"
+                rf'en {palabra}',                    # "en instagram"
+                rf'de {palabra}',                    # "de instagram"
+                rf'a {palabra}',                      # "a instagram"
+                rf'por {palabra}',                    # "por instagram"
+                rf'mediante {palabra}',               # "mediante instagram"
+                rf'usando {palabra}',                 # "usando instagram"
+                rf'publicar en {palabra}',            # "publicar en instagram"
+                rf'subir a {palabra}',                # "subir a instagram"
+                rf'post para {palabra}',              # "post para instagram"
+                rf'contenido para {palabra}',         # "contenido para instagram"
+            ]
+            for patron in patrones:
+                if re.search(patron, contenido_lower):
+                    logger.info(f"🔍 Mención EXPLÍCITA detectada: {red} (patrón: {patron})")
+                    return red
     
-    # Luego buscar palabras clave asociadas
+    # PRIORIDAD 2: Buscar palabras clave contextuales
     for red, palabras in KEYWORDS.items():
         for palabra in palabras[:5]:  # Solo las más relevantes
             if palabra in contenido_lower:
-                logger.info(f"🔍 Palabra clave '{palabra}' sugiere {red}")
+                logger.info(f"🔍 Palabra clave contextual '{palabra}' sugiere {red}")
                 return red
     
     return None
+
 
 ROUTER_PROMPT = """
 Eres un experto en marketing digital. Debes elegir la MEJOR red social para este contenido.
@@ -64,37 +100,38 @@ Eres un experto en marketing digital. Debes elegir la MEJOR red social para este
 CONTENIDO DEL USUARIO:
 "{contenido}"
 
-INSTRUCCIONES:
-1. Si el usuario MENCIONA EXPLÍCITAMENTE una red social, USA ESA.
-2. Si no, analiza el tipo de contenido y elige la más adecuada.
+INSTRUCCIONES IMPORTANTES:
+1. Si el usuario MENCIONA EXPLÍCITAMENTE una red social (linkedin, instagram, tiktok, facebook), USA ESA.
+   Ejemplos: "para LinkedIn", "en Instagram", "post para TikTok", "compartir en Facebook", "subir a IG"
 
-REDES SOCIALES:
-- linkedin: Profesional, carreras, educación, B2B, cursos, artículos
-- instagram: Visual, productos, moda, lifestyle, fotos, reels
-- tiktok: Viral, entretenimiento, trends, baile, challenges
-- facebook: Comunidades, grupos, eventos, discusión familiar
+2. Si no hay mención explícita, analiza el tipo de contenido y elige la más adecuada:
+   - linkedin: Contenido profesional, carreras, educación, B2B, cursos, experiencia laboral
+   - instagram: Contenido visual, moda, viajes, comida, productos, fotografía
+   - tiktok: Contenido viral, entretenimiento, baile, trends, humor, challenges
+   - facebook: Comunidades, eventos, grupos, contenido familiar, discusiones
 
-Responde SOLO con JSON:
+Responde SOLO con JSON en este formato:
 {
   "red_social": "linkedin",
-  "justificacion": "Contenido profesional sobre cursos"
+  "justificacion": "explicación breve de la decisión"
 }
 """
+
 
 def router_agent(contenido: str) -> str:
     """
     Decide qué red social usar.
-    Prioridad: 1. Keywords, 2. Gemini, 3. Instagram por defecto.
+    Prioridad: 1. Menciones explícitas, 2. Keywords, 3. Gemini, 4. Instagram por defecto.
     """
     logger.info("🤖 Router agent iniciado")
     
-    # PASO 1: Detección por keywords
+    # PASO 1: Detección por menciones explícitas y keywords
     red_detectada = detectar_red_por_keywords(contenido)
     if red_detectada:
-        logger.info(f"✅ Detectada por keywords: {red_detectada}")
+        logger.info(f"✅ Detectada por reglas: {red_detectada}")
         return red_detectada
     
-    # PASO 2: Usar Gemini
+    # PASO 2: Usar Gemini si no hay detección clara
     try:
         contenido_recortado = contenido[:800]
         prompt = ROUTER_PROMPT.format(contenido=contenido_recortado)
@@ -116,7 +153,7 @@ def router_agent(contenido: str) -> str:
     except Exception as e:
         logger.error(f"❌ Error en Gemini: {e}")
     
-    # PASO 3: Default
+    # PASO 3: Default (Instagram)
     logger.info("⚠️ Usando Instagram por defecto")
     return "instagram"
 

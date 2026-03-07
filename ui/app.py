@@ -238,7 +238,7 @@ def run_app():
     
     user_input = st.text_area(
         label="Descripción del contenido",
-        placeholder="Ej: Curso de Python para principiantes. También aceptamos ideas para LinkedIn, TikTok o Facebook!",
+        placeholder="Ej: Post para un Curso de Python para Instagram. También aceptamos ideas para LinkedIn, TikTok o Facebook!",
         height=120,
         label_visibility="collapsed",
         key="input_idea"
