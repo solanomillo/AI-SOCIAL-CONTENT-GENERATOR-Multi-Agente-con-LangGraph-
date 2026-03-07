@@ -127,7 +127,7 @@ AI-SOCIAL-CONTENT-GENERATOR/
 
 1️⃣ Clonar el repositorio
 ```bash
-git clone https://github.com/tuusuario/AI-SOCIAL-CONTENT-GENERATOR.git
+git clone https://github.com/solanomillo/AI-SOCIAL-CONTENT-GENERATOR-Multi-Agente-con-LangGraph-.git
 cd AI-SOCIAL-CONTENT-GENERATOR
 ```
 
